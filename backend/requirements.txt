@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 beautifulsoup4
+lxml
 jieba
 scikit-learn
 numpy
