@@ -1,0 +1,17 @@
+backend/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+node_modules/
+dist/
+.astro/
+data/*
+!data/.keep
+storage/*
+!storage/.keep
+.env
+.env.local
+*.key
+.vscode/
+.idea/
+.DS_Store
