@@ -1,0 +1,790 @@
+---
+---
+
+<div class="athanor-container">
+  <header class="header">
+    <h1>Athanor 炼金反应堆</h1>
+    <p>信号高于噪音：将混乱的书签 HTML 转化为有序的知识星群</p>
+  </header>
+
+  <main>
+    <div id="upload-zone" class="upload-zone">
+      <div class="upload-content">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-upload"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <h3>拖拽书签文件到这里</h3>
+        <p>或者点击选择 .html 文件</p>
+        <input type="file" id="file-input" accept=".html" hidden />
+      </div>
+    </div>
+
+    <div id="status-area" class="status-area hidden">
+      <div class="loader"></div>
+      <p>正在熔炼中...</p>
+    </div>
+
+    <div id="error-area" class="error-area hidden">
+      <p id="error-message"></p>
+      <button id="retry-btn">重试</button>
+    </div>
+
+    <div id="result-area" class="result-area hidden">
+      <div class="meta-stats">
+        <div class="stat-card">
+          <span class="stat-label">耗时</span>
+          <span class="stat-value" id="meta-time">0s</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">信号数量</span>
+          <span class="stat-value" id="meta-count">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">结晶密度</span>
+          <span class="stat-value" id="meta-density">0</span>
+        </div>
+      </div>
+
+      <div class="actions-bar">
+        <button id="export-html-btn" class="action-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          导出 HTML 书签
+        </button>
+        <button id="export-json-btn" class="action-btn secondary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><file-code class="feather feather-file-code"></file-code><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          导出 JSON
+        </button>
+      </div>
+
+      <div class="persona-card-container">
+        <div id="persona-card" class="persona-card-wrapper"></div>
+        <div class="skill-radar-wrapper">
+             <h3>技能树 (Skill Radar)</h3>
+             <div id="skill-chart" class="skill-chart-container"></div>
+        </div>
+      </div>
+
+      <div class="charts-grid-top">
+          <section class="section">
+            <h2>兴趣河流图 (Theme River)</h2>
+            <div id="river-chart" class="chart-container full-width"></div>
+          </section>
+      </div>
+
+      <div class="charts-grid-middle">
+          <section class="section">
+            <h2>时间线热力图 (Chronos)</h2>
+            <div id="timeline-chart" class="chart-container"></div>
+          </section>
+          
+          <section class="section">
+            <h2>昼夜活跃节律 (Circadian)</h2>
+            <div id="activity-chart" class="chart-container"></div>
+          </section>
+      </div>
+
+      <div class="charts-grid-middle">
+          <section class="section">
+            <h2>域名领地 (Territory)</h2>
+            <div id="domain-chart" class="chart-container"></div>
+          </section>
+          
+          <section class="section">
+            <h2>语义星云 (Nebula)</h2>
+            <div id="cloud-chart" class="chart-container"></div>
+          </section>
+      </div>
+
+      <section class="section">
+        <h2>星群结晶 (Clusters)</h2>
+        <div id="clusters-grid" class="clusters-grid"></div>
+      </section>
+      
+      <button id="reset-btn" class="reset-btn">开始新的熔炼</button>
+    </div>
+  </main>
+</div>
+
+<script>
+  import * as echarts from 'echarts';
+  import 'echarts-wordcloud';
+  
+  // 导入拆分后的模块
+  import { renderRiver } from './charts/river';
+  import { renderTimeline } from './charts/timeline';
+  import { renderActivity } from './charts/activity';
+  import { renderDomains } from './charts/domains';
+  import { renderCloud } from './charts/cloud';
+  import { renderSkillRadar } from './charts/radar';
+  import { renderPersonaCard } from './ui/PersonaCard';
+  import { renderClustersGrid } from './ui/ClusterGrid';
+
+  // 状态变量
+  let currentData: any = null;
+
+  const uploadZone = document.getElementById('upload-zone');
+  const fileInput = document.getElementById('file-input');
+  const statusArea = document.getElementById('status-area');
+  const errorArea = document.getElementById('error-area');
+  const resultArea = document.getElementById('result-area');
+  const errorMessage = document.getElementById('error-message');
+  
+  // 绑定元素
+  const metaTime = document.getElementById('meta-time');
+  const metaCount = document.getElementById('meta-count');
+  const metaDensity = document.getElementById('meta-density');
+  
+  const personaCardEl = document.getElementById('persona-card');
+  const skillChartEl = document.getElementById('skill-chart');
+  const riverChartEl = document.getElementById('river-chart');
+  const timelineChartEl = document.getElementById('timeline-chart');
+  const activityChartEl = document.getElementById('activity-chart');
+  const domainChartEl = document.getElementById('domain-chart');
+  const cloudChartEl = document.getElementById('cloud-chart');
+  
+  const clustersGrid = document.getElementById('clusters-grid');
+  const exportHtmlBtn = document.getElementById('export-html-btn');
+  const exportJsonBtn = document.getElementById('export-json-btn');
+
+  // 事件监听
+  uploadZone?.addEventListener('click', () => fileInput?.click());
+  uploadZone?.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+  });
+  uploadZone?.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    if (e.dataTransfer?.files.length) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  fileInput?.addEventListener('change', (e) => {
+    if ((e.target as HTMLInputElement).files?.length) {
+      handleFile((e.target as HTMLInputElement).files![0]);
+    }
+  });
+
+  document.getElementById('retry-btn')?.addEventListener('click', resetUI);
+  document.getElementById('reset-btn')?.addEventListener('click', resetUI);
+  exportHtmlBtn?.addEventListener('click', () => exportBookmarks('html'));
+  exportJsonBtn?.addEventListener('click', () => exportBookmarks('json'));
+
+  function resetUI() {
+    uploadZone?.classList.remove('hidden');
+    statusArea?.classList.add('hidden');
+    errorArea?.classList.add('hidden');
+    resultArea?.classList.add('hidden');
+    if (fileInput) (fileInput as HTMLInputElement).value = '';
+    
+    // 清理图表实例
+    [riverChartEl, timelineChartEl, activityChartEl, domainChartEl, cloudChartEl, skillChartEl].forEach(el => {
+        if (el) {
+            echarts.getInstanceByDom(el)?.dispose();
+            el.innerHTML = '';
+        }
+    });
+
+    if (clustersGrid) clustersGrid.innerHTML = '';
+    if (personaCardEl) personaCardEl.innerHTML = '';
+    currentData = null;
+  }
+
+  async function handleFile(file: File) {
+    if (!file.name.endsWith('.html')) {
+      showError('请上传 .html 格式的书签文件');
+      return;
+    }
+
+    uploadZone?.classList.add('hidden');
+    statusArea?.classList.remove('hidden');
+    errorArea?.classList.add('hidden');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/transmute', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.成功) {
+        currentData = data; // 保存数据用于导出
+        renderResults(data);
+      } else {
+        showError(data.信息 || '熔炼失败');
+      }
+    } catch (err) {
+      console.error(err);
+      showError('连接服务器失败，请确保后端已启动');
+    }
+  }
+
+  function showError(msg: string) {
+    statusArea?.classList.add('hidden');
+    errorArea?.classList.remove('hidden');
+    if (errorMessage) errorMessage.textContent = msg;
+  }
+
+  function renderResults(data: any) {
+    statusArea?.classList.add('hidden');
+    resultArea?.classList.remove('hidden');
+
+    // 填充元数据
+    if (metaTime) metaTime.textContent = data.元数据.耗时;
+    if (metaCount) metaCount.textContent = data.元数据.信号数量;
+    if (metaDensity) metaDensity.textContent = data.元数据.结晶密度;
+
+    // 延迟渲染图表，确保容器已显示并具有尺寸
+    requestAnimationFrame(() => {
+        // 渲染各类图表
+        try {
+            if (data.结果.用户画像 && personaCardEl) renderPersonaCard(personaCardEl, data.结果.用户画像);
+            if (data.结果.技能雷达 && skillChartEl) renderSkillRadar(skillChartEl, data.结果.技能雷达);
+            if (data.结果.兴趣河流 && riverChartEl) renderRiver(riverChartEl, data.结果.兴趣河流);
+            if (data.结果.时间线 && timelineChartEl) renderTimeline(timelineChartEl, data.结果.时间线);
+            if (data.结果.活跃时段 && activityChartEl) renderActivity(activityChartEl, data.结果.活跃时段);
+            if (data.结果.域名领地 && domainChartEl) renderDomains(domainChartEl, data.结果.域名领地);
+            if (data.结果.语义星云 && cloudChartEl) renderCloud(cloudChartEl, data.结果.语义星云);
+            
+            // 渲染星群
+            if (data.结果.星群结晶 && clustersGrid) renderClustersGrid(clustersGrid, data.结果.星群结晶);
+        } catch (e) {
+            console.error("Chart rendering error:", e);
+        }
+    });
+  }
+
+  function exportBookmarks(type: 'html' | 'json') {
+    if (!currentData) return;
+
+    if (type === 'json') {
+      const blob = new Blob([JSON.stringify(currentData, null, 2)], { type: 'application/json' });
+      downloadFile(blob, `athanor-export-${Date.now()}.json`);
+    } else {
+      const htmlContent = generateNetscapeHTML(currentData.结果.星群结晶);
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      downloadFile(blob, `athanor-export-${Date.now()}.html`);
+    }
+  }
+
+  function generateNetscapeHTML(clusters: any[]) {
+    const now = Math.floor(Date.now() / 1000);
+    let html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file.
+     It will be read and overwritten.
+     DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+`;
+
+    clusters.forEach(cluster => {
+      html += `    <DT><H3 ADD_DATE="${now}" LAST_MODIFIED="${now}">${cluster.topic}</H3>\n`;
+      html += `    <DL><p>\n`;
+      cluster.nodes.forEach((node: any) => {
+        html += `        <DT><A HREF="${node.url}" ADD_DATE="${now}">${node.title}</A>\n`;
+      });
+      html += `    </DL><p>\n`;
+    });
+
+    html += `</DL><p>`;
+    return html;
+  }
+
+  function downloadFile(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+</script>
+
+<style>
+  :root {
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --bg: #0f172a;
+    --card-bg: #1e293b;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --border: #334155;
+  }
+
+  .athanor-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+    font-family: system-ui, -apple-system, sans-serif;
+    color: var(--text);
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .header h1 {
+    font-size: 2.5rem;
+    background: linear-gradient(to right, #818cf8, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 1rem;
+    padding: 4rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(30, 41, 59, 0.5);
+  }
+
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  .icon-upload {
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  /* Stats */
+  .meta-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    text-align: center;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  .stat-label {
+    display: block;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--primary);
+  }
+
+  /* Actions Bar */
+  .actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .action-btn.secondary {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  
+  .action-btn.secondary:hover {
+    background: var(--border);
+  }
+
+  /* Chart Layouts */
+  .charts-grid-top, .charts-grid-middle {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+  }
+
+  /* Chart Container */
+  .chart-container {
+    width: 100%;
+    height: 350px;
+    background: var(--card-bg);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+  }
+
+  /* Clusters */
+  .clusters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .cluster-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cluster-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--primary);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  }
+
+  .cluster-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+  }
+
+  .cluster-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #fff;
+    line-height: 1.4;
+  }
+
+  .badge {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--primary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+
+  .cluster-keywords {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .keyword {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  .cluster-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem 0;
+    flex-grow: 1;
+  }
+
+  .cluster-list li {
+    margin-bottom: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cluster-list a {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 0.9rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+  }
+
+  .cluster-list a:hover {
+    color: var(--primary);
+    opacity: 1;
+  }
+
+  .expand-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    width: 100%;
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    margin-top: auto;
+  }
+
+  .expand-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+  }
+
+  .section {
+    margin-top: 1rem;
+  }
+
+  .section h2 {
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+    color: #fff;
+    border-left: 4px solid var(--primary);
+    padding-left: 1rem;
+  }
+
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+
+  button:hover {
+    background: var(--primary-hover);
+  }
+
+  .reset-btn {
+    margin-top: 3rem;
+    width: 100%;
+    background: var(--border);
+    color: var(--text-muted);
+  }
+  
+  .reset-btn:hover {
+    background: var(--card-bg);
+    color: var(--text);
+  }
+
+  .loader {
+    border: 4px solid var(--border);
+    border-top: 4px solid var(--primary);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* Persona Card Styles */
+  .persona-card-container {
+      margin-bottom: 2rem;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.5rem;
+      align-items: stretch; /* 确保子元素高度一致 */
+  }
+  
+  .persona-card-wrapper {
+      height: 100%;
+      min-height: 0; /* 防止 grid item 溢出 */
+  }
+
+  .skill-radar-wrapper {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      height: 100%; /* 填满父容器 */
+      min-height: 0; /* 防止 grid item 溢出 */
+  }
+  
+  .skill-radar-wrapper h3 {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      text-align: center;
+      flex-shrink: 0; /* 防止标题被压缩 */
+  }
+  
+  .skill-chart-container {
+      width: 100%;
+      flex-grow: 1; /* 占据剩余空间 */
+      min-height: 200px; /* 给 ECharts 一个最小高度 */
+  }
+  
+  /* Global Styles for Dynamic Content */
+  :global(.persona-card) {
+      height: 100%;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1.5rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  }
+  
+  :global(.persona-card::before) {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #818cf8, #c084fc, #f472b6);
+  }
+  
+  :global(.avatar-section) {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+  }
+  
+  :global(.avatar-circle) {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: white;
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  
+  :global(.level-info) {
+      display: flex;
+      flex-direction: column;
+  }
+  
+  :global(.level-title) {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 0.25rem;
+      background: linear-gradient(to right, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+  }
+  
+  :global(.level-subtitle) {
+      font-family: monospace;
+      color: var(--primary);
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      opacity: 0.8;
+  }
+  
+  :global(.stats-section) {
+      display: flex;
+      gap: 3rem;
+      padding: 1rem 0;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  
+  :global(.stat-item) {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+  }
+  
+  :global(.stat-item .label) {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+  }
+  
+  :global(.stat-item .value) {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #e2e8f0;
+  }
+  
+  :global(.tags-section) {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem; /* 增加一点上边距 */
+  }
+  
+  :global(.persona-tag) {
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #818cf8;
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      margin-right: 0.5rem; /* 额外的保险，防止 gap 不生效 */
+      margin-bottom: 0.5rem; /* 多行时的行距 */
+  }
+  
+  .full-width {
+      grid-column: 1 / -1;
+  }
+
+  /* Favicon Styles - Removed */
+  .bookmark-link {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+  }
+  
+  .link-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+  }
+
+  .bookmark-tags {
+      display: flex;
+      gap: 0.25rem;
+      margin-top: 0.25rem;
+      flex-wrap: wrap;
+  }
+
+  .tag {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0.1rem 0.3rem;
+      border-radius: 2px;
+  }
+</style>
