@@ -15,8 +15,6 @@ storage/*
 .vscode/
 .idea/
 .DS_Store
-
-# Database
 *.db
 *.sqlite
 *.sqlite3

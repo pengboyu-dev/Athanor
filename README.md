@@ -1,5 +1,7 @@
 # ⚗️ Athanor (炼金炉)
 
+> **⚠️ STATUS: ARCHIVED (v0.1 Python Prototype). For latest version, switch to v0.2 branch.**
+
 > **Where raw data meets insight.**
 > 你的浏览器书签不是死的数据，它们是冻结的思维切片。
 
