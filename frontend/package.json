@@ -9,6 +9,8 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^5.17.1"
+    "astro": "^5.17.1",
+    "echarts": "^6.0.0",
+    "echarts-wordcloud": "^2.1.0"
   }
 }

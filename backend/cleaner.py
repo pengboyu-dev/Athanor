@@ -55,9 +55,10 @@ class AthanorPurifier:
         """
         核心熔炼逻辑：高性能字节流处理。
         """
-        # ⚡ 引擎切换：显式使用 'lxml' 提升萃取效率
-        # from_encoding=None 激活自动编码感应，解决乱码噪音
-        soup = BeautifulSoup(raw_content, 'lxml', from_encoding=None)
+        # ⚡ 引擎切换：使用 'html.parser' 替代 'lxml'
+        # 书签文件 (Netscape 格式) 往往嵌套极深且不规范，lxml 过于严格会导致数据截断。
+        # html.parser 虽然慢一点，但容错性极强，能保证数据的完整性 (High Recall)。
+        soup = BeautifulSoup(raw_content, 'html.parser', from_encoding=None)
         
         actual_encoding = soup.original_encoding
         if actual_encoding:
@@ -87,7 +88,8 @@ class AthanorPurifier:
             }
             
             # 提取浏览器原生标签 (如果存在)
-            raw_tags = link.get('tags')
+            # 兼容 TAGS (大写) 和 tags (小写)
+            raw_tags = link.get('tags') or link.get('TAGS')
             if isinstance(raw_tags, str):
                 signal["tags"] = [t.strip() for t in raw_tags.split(',')]
 
